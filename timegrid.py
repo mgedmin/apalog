@@ -76,11 +76,22 @@ def pigeonhole(entries, requests=None):
 def timegrid(requests):
     """Draw a grid given a mapping of (hour, minute) -> number_of_requests"""
     w = sys.stdout.write
+    w("      [")
+    for m in range(60):
+        if m % 10 == 0:
+            w(str(m // 10))
+        elif m % 10 == 1:
+            w("0")
+        else:
+            w(" ")
+    w("]\n")
     for h in range(24):
         w("%02d:00 [" % h)
         for m in range(60):
             if requests.get((h, m)):
                 w("#")
+            elif m % 10 == 0 and m > 0:
+                w(":")
             else:
                 w(" ")
         w("]\n")
