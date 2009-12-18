@@ -5,6 +5,7 @@ for every hour and minute were there any requests processed today?
 
 Requires Python 2.4 or later.
 """
+
 import sys
 import re
 import datetime
@@ -26,26 +27,30 @@ def parse_logs(filenames):
     return itertools.chain(*map(parse_log, filenames))
 
 
+def parse_date(datestr):
+    """Parse a date (YYYY-MM-DD or DD/Mmm/YYYY) into a datetime.date."""
+    if '-' in datestr:
+        y, m, d = datestr.split('-')
+    else:
+        d, m, y = datestr.split('/')
+        m = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
+             'may': 5, 'jun': 6, 'jul': 7, 'aug': 8,
+             'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}.get(m.lower(), m)
+    return datetime.date(int(y), int(m), int(d))
+
+
 def parse_log(filename):
     """Parse Apache common log format, return Entry objects."""
     rx = re.compile(r"^(\S+) \S+ \S+"
-                    r" \[\s*(\d+)/(\w+)/(\d+):(\d+):(\d+):\d+ [-+]\d+\]")
-    months = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-              'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+                    r" \[\s*(\d+/\w+/\d+):(\d+):(\d+):\d+ [-+]\d+\]")
     for line in open(filename):
         # 1.2.3.4 - - [18/Dec/2009:16:17:18 +0100] "GET /url HTTP/1.1" 200 1000 "http://referrer" "UserAgent" "-"
         m = rx.match(line)
         if m:
-            ip, day, month, year, hour, minute = m.groups()
-            year = int(year)
-            month = months[month.lower()]
-            day = int(day)
+            ip, date, hour, minute = m.groups()
+            date = parse_date(date)
             hour = int(hour)
             minute = int(minute)
-            try:
-                date = datetime.date(year, month, day)
-            except ValueError, e:
-                raise ValueError('%s/%s/%s: %s' % (day, month, year, e))
             yield Entry(ip, date, hour, minute)
 
 
@@ -99,20 +104,25 @@ def timegrid(requests):
 
 def main():
     parser = optparse.OptionParser("usage: %prog [options] filename ...",
-                                   description=__doc__.lstrip())
+                       description=__doc__.lstrip().split("\n\n")[0])
+    parser.add_option("-d", metavar='DATE', dest="date",
+                      help="print grid for given date instead of today")
     parser.add_option("-x", metavar='IP', dest="exclude", action="append",
                       help="ignore requests from this IP")
     opts, files = parser.parse_args()
     if not files:
         parser.error("please specify an apache access log file to parse")
-    date = datetime.date.today()
+    if opts.date:
+        date = parse_date(opts.date)
+    else:
+        date = datetime.date.today()
     entries = parse_logs(files)
     day_entries = filter_by_date(entries, date)
     if opts.exclude is not None:
         for ip in opts.exclude:
             day_entries = filter_out_ip(day_entries, ip)
     requests = pigeonhole(day_entries)
-    print "Requests handled today:"
+    print "Requests handled on %s:" % date
     timegrid(requests)
 
 
