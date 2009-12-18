@@ -1,21 +1,34 @@
 #!/usr/bin/env python
-# please keep python 2.4 compatibility
+"""
+Parses an apache log file (in common log format) and prints an activity grid:
+for every hour and minute were there any requests processed today?
+
+Requires Python 2.4 or later.
+"""
 import sys
 import re
 import datetime
+import optparse
+import itertools
 
 
 class Entry(object):
-    __slots__ = ['date', 'hour', 'minute']
-    def __init__(self, date=None, hour=None, minute=None):
+    __slots__ = ['ip', 'date', 'hour', 'minute']
+    def __init__(self, ip=None, date=None, hour=None, minute=None):
+        self.ip = ip
         self.date = date
         self.hour = hour
         self.minute = minute
 
 
+def parse_logs(filenames):
+    """Parse several Apache log files, return Entry objects."""
+    return itertools.chain(*map(parse_log, filenames))
+
+
 def parse_log(filename):
     """Parse Apache common log format, return Entry objects."""
-    rx = re.compile(r"^\S+ \S+ \S+"
+    rx = re.compile(r"^(\S+) \S+ \S+"
                     r" \[\s*(\d+)/(\w+)/(\d+):(\d+):(\d+):\d+ [-+]\d+\]")
     months = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
               'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
@@ -23,7 +36,7 @@ def parse_log(filename):
         # 1.2.3.4 - - [18/Dec/2009:16:17:18 +0100] "GET /url HTTP/1.1" 200 1000 "http://referrer" "UserAgent" "-"
         m = rx.match(line)
         if m:
-            day, month, year, hour, minute = m.groups()
+            ip, day, month, year, hour, minute = m.groups()
             year = int(year)
             month = months[month.lower()]
             day = int(day)
@@ -33,7 +46,7 @@ def parse_log(filename):
                 date = datetime.date(year, month, day)
             except ValueError, e:
                 raise ValueError('%s/%s/%s: %s' % (day, month, year, e))
-            yield Entry(date, hour, minute)
+            yield Entry(ip, date, hour, minute)
 
 
 def filter_by_date(entries, date):
@@ -41,6 +54,14 @@ def filter_by_date(entries, date):
     for entry in entries:
         if entry.date == date:
             yield entry
+
+
+def filter_out_ip(entries, ip):
+    """Return only those log entries that don't match the given IP."""
+    for entry in entries:
+        if entry.ip != ip:
+            yield entry
+
 
 def pigeonhole(entries, requests=None):
     """Put log entries into time slots, return a dict (h, m) -> count."""
@@ -66,13 +87,19 @@ def timegrid(requests):
 
 
 def main():
-    try:
-        filename = sys.argv[1]
-    except IndexError:
-        sys.exit("usage: %s filename" % sys.argv[0])
+    parser = optparse.OptionParser("usage: %prog [options] filename ...",
+                                   description=__doc__.lstrip())
+    parser.add_option("-x", metavar='IP', dest="exclude", action="append",
+                      help="ignore requests from this IP")
+    opts, files = parser.parse_args()
+    if not files:
+        parser.error("please specify an apache access log file to parse")
     date = datetime.date.today()
-    entries = parse_log(filename)
+    entries = parse_logs(files)
     day_entries = filter_by_date(entries, date)
+    if opts.exclude is not None:
+        for ip in opts.exclude:
+            day_entries = filter_out_ip(entries, ip)
     requests = pigeonhole(day_entries)
     print "Requests handled today:"
     timegrid(requests)
