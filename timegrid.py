@@ -99,7 +99,7 @@ def main():
     day_entries = filter_by_date(entries, date)
     if opts.exclude is not None:
         for ip in opts.exclude:
-            day_entries = filter_out_ip(entries, ip)
+            day_entries = filter_out_ip(day_entries, ip)
     requests = pigeonhole(day_entries)
     print "Requests handled today:"
     timegrid(requests)
