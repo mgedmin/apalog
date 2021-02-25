@@ -108,6 +108,8 @@ def main():
     parser = optparse.OptionParser(
         "usage: %prog [options] filename ...",
         description=__doc__.lstrip().split("\n\n")[0])
+    parser.add_option("-a", "--all", action="store_true",
+                      help="combine all dates into one grid")
     parser.add_option("-d", metavar='DATE', dest="date",
                       help="print grid for given date instead of today")
     parser.add_option("-x", metavar='IP', dest="exclude", action="append",
@@ -115,17 +117,23 @@ def main():
     opts, files = parser.parse_args()
     if not files:
         parser.error("please specify an apache access log file to parse")
-    if opts.date:
+    if opts.all:
+        date = None
+    elif opts.date:
         date = parse_date(opts.date)
     else:
         date = datetime.date.today()
     entries = parse_logs(files)
-    day_entries = filter_by_date(entries, date)
+    if date is not None:
+        entries = filter_by_date(entries, date)
     if opts.exclude is not None:
         for ip in opts.exclude:
-            day_entries = filter_out_ip(day_entries, ip)
-    requests = pigeonhole(day_entries)
-    print("Requests handled on %s:" % date)
+            entries = filter_out_ip(entries, ip)
+    requests = pigeonhole(entries)
+    if date is not None:
+        print("Requests handled on %s:" % date)
+    else:
+        print("Requests handled on all days:")
     timegrid(requests)
 
 
