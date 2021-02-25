@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Parses an apache log file (in common log format) and prints an activity grid:
 for every hour and minute were there any requests processed today?
@@ -15,6 +15,7 @@ import itertools
 
 class Entry(object):
     __slots__ = ['ip', 'date', 'hour', 'minute']
+
     def __init__(self, ip=None, date=None, hour=None, minute=None):
         self.ip = ip
         self.date = date
@@ -44,7 +45,8 @@ def parse_log(filename):
     rx = re.compile(r"^(\S+) \S+ \S+"
                     r" \[\s*(\d+/\w+/\d+):(\d+):(\d+):\d+ [-+]\d+\]")
     for line in open(filename):
-        # 1.2.3.4 - - [18/Dec/2009:16:17:18 +0100] "GET /url HTTP/1.1" 200 1000 "http://referrer" "UserAgent" "-"
+        # 1.2.3.4 - - [18/Dec/2009:16:17:18 +0100] "GET /url HTTP/1.1" 200 1000
+        #   "http://referrer" "UserAgent" "-"
         m = rx.match(line)
         if m:
             ip, date, hour, minute = m.groups()
@@ -103,8 +105,9 @@ def timegrid(requests):
 
 
 def main():
-    parser = optparse.OptionParser("usage: %prog [options] filename ...",
-                       description=__doc__.lstrip().split("\n\n")[0])
+    parser = optparse.OptionParser(
+        "usage: %prog [options] filename ...",
+        description=__doc__.lstrip().split("\n\n")[0])
     parser.add_option("-d", metavar='DATE', dest="date",
                       help="print grid for given date instead of today")
     parser.add_option("-x", metavar='IP', dest="exclude", action="append",
@@ -122,7 +125,7 @@ def main():
         for ip in opts.exclude:
             day_entries = filter_out_ip(day_entries, ip)
     requests = pigeonhole(day_entries)
-    print "Requests handled on %s:" % date
+    print("Requests handled on %s:" % date)
     timegrid(requests)
 
 
