@@ -14,13 +14,13 @@ import itertools
 
 
 class Entry(object):
-    __slots__ = ['ip', 'date', 'hour', 'minute']
 
-    def __init__(self, ip=None, date=None, hour=None, minute=None):
+    def __init__(self, ip=None, date=None, hour=None, minute=None, user_agent=None):
         self.ip = ip
         self.date = date
         self.hour = hour
         self.minute = minute
+        self.user_agent = user_agent
 
 
 def parse_logs(filenames):
@@ -43,17 +43,22 @@ def parse_date(datestr):
 def parse_log(filename):
     """Parse Apache common log format, return Entry objects."""
     rx = re.compile(r"^(\S+) \S+ \S+"
-                    r" \[\s*(\d+/\w+/\d+):(\d+):(\d+):\d+ [-+]\d+\]")
+                    r" \[\s*(\d+/\w+/\d+):(\d+):(\d+):\d+ [-+]\d+\]"
+                    r' "[^"]*" \d+ \d+ "[^"]*" "([^"]*)"')
     for line in open(filename):
+        # typical apache access log format:
         # 1.2.3.4 - - [18/Dec/2009:16:17:18 +0100] "GET /url HTTP/1.1" 200 1000
         #   "http://referrer" "UserAgent" "-"
+        # my preferred custom log format:
+        # 1.2.3.4 - - [18/Dec/2009:16:17:18 +0100] "GET /url HTTP/1.1" 200 1000
+        #   "http://referrer" "UserAgent" 0s 4894us example.com:443
         m = rx.match(line)
         if m:
-            ip, date, hour, minute = m.groups()
+            ip, date, hour, minute, user_agent = m.groups()
             date = parse_date(date)
             hour = int(hour)
             minute = int(minute)
-            yield Entry(ip, date, hour, minute)
+            yield Entry(ip, date, hour, minute, user_agent)
 
 
 def filter_by_date(entries, date):
@@ -67,6 +72,16 @@ def filter_out_ip(entries, ip):
     """Return only those log entries that don't match the given IP."""
     for entry in entries:
         if entry.ip != ip:
+            yield entry
+
+
+def filter_out_user_agent(entries, user_agent):
+    """Return only those log entries that don't match the given user agent.
+
+    Does substring matching.
+    """
+    for entry in entries:
+        if user_agent not in entry.user_agent:
             yield entry
 
 
@@ -114,6 +129,8 @@ def main():
                       help="print grid for given date instead of today")
     parser.add_option("-x", metavar='IP', dest="exclude", action="append",
                       help="ignore requests from this IP")
+    parser.add_option("-U", metavar='USER-AGENT', dest="exclude_agent", action="append",
+                      help="ignore requests from this user agent")
     opts, files = parser.parse_args()
     if not files:
         parser.error("please specify an apache access log file to parse")
@@ -129,6 +146,9 @@ def main():
     if opts.exclude is not None:
         for ip in opts.exclude:
             entries = filter_out_ip(entries, ip)
+    if opts.exclude_agent is not None:
+        for agent in opts.exclude_agent:
+            entries = filter_out_user_agent(entries, agent)
     requests = pigeonhole(entries)
     if date is not None:
         print("Requests handled on %s:" % date)
